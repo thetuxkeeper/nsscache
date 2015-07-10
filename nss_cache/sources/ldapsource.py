@@ -116,6 +116,8 @@ class LdapSource(source.Source):
       configuration['timelimit'] = self.TIMELIMIT
     if not 'modifytsattr' in configuration:
       configuration['modifytsattr'] = 'modifyTimestamp'
+    if not 'homedirattr' in configuration:
+      configuration['homedirattr'] = 'homeDirectory'
     if not 'tsformat' in configuration:
       configuration['tsformat'] = '%Y%m%d%H%M%SZ'
     # TODO(jaq): XXX EVIL.  ldap client libraries change behaviour if we use
@@ -131,7 +133,7 @@ class LdapSource(source.Source):
     if not 'tls_starttls' in configuration:
       configuration['tls_starttls'] = 0
     if not 'referrals' in configuration:
-      configuration['referrals'] = 1
+      configuration['referrals'] = ldap.OPT_ON
 
     # Translate tls_require into appropriate constant, if necessary.
     if configuration['tls_require_cert'] == 'never':
@@ -252,7 +254,7 @@ class LdapSource(source.Source):
         return
 
       if result_type != ldap.RES_SEARCH_ENTRY:
-        self.log.info('Unknown result type %r, ignoring. -- %r', result_type, data)
+        self.log.info('Unknown result type %r, ignoring.', result_type)
         return
 
       if not data:
@@ -481,7 +483,7 @@ class UpdateGetter(object):
     if since is not None:
       # since openldap disallows modifyTimestamp "greater than" we have to
       # increment by one second.
-      ts = self.FromTimestampToLdap(since + 1/60)
+      ts = self.FromTimestampToLdap(since + 1)
       search_filter = ('(&%s(%s>=%s))' % (search_filter, self.conf['modifytsattr'], ts))
 
     if search_scope == 'base':
@@ -508,8 +510,6 @@ class UpdateGetter(object):
         if field not in obj:
           logging.warn('invalid object passed: %r not in %r', field, obj)
           raise ValueError('Invalid object passed: %r', obj)
-        else:
-          logging.debug('current object passed: %r in %r', field, obj)
 
       obj_ts = self.FromLdapToTimestamp(obj[self.conf['modifytsattr']][0])
 
@@ -534,12 +534,12 @@ class PasswdUpdateGetter(UpdateGetter):
   def __init__(self, conf):
     super(PasswdUpdateGetter, self).__init__(conf)
     self.attrs = ['uid', 'uidNumber', 'gidNumber', 'gecos', 'cn',
-                  'homeDirectory', 'loginShell', 'fullName']
+                  self.conf['homedirattr'], 'loginShell', 'fullName']
     if 'uidattr' in self.conf:
       self.attrs.append(self.conf['uidattr'])
     if 'uidregex' in self.conf:
       self.uidregex = re.compile(self.conf['uidregex'])
-    self.essential_fields = ['uid', 'uidNumber', 'gidNumber', 'homeDirectory']
+    self.essential_fields = ['uid', 'uidNumber', 'gidNumber', self.conf['homedirattr']]
 
   def CreateMap(self):
     """Returns a new PasswdMap instance to have PasswdMapEntries added to it."""
@@ -576,7 +576,7 @@ class PasswdUpdateGetter(UpdateGetter):
 
     pw.uid = int(obj['uidNumber'][0])
     pw.gid = int(obj['gidNumber'][0])
-    pw.dir = obj['homeDirectory'][0]
+    pw.dir = obj[self.conf['homedirattr']][0]
 
     # hack
     pw.passwd = 'x'
