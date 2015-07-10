@@ -20,4 +20,3 @@ dist
 a.out
 *.debian.tar.xz
 .pybuild
-/nsscache-bgo.conf
