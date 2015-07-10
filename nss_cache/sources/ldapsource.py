@@ -114,6 +114,10 @@ class LdapSource(source.Source):
       configuration['scope'] = self.SCOPE
     if not 'timelimit' in configuration:
       configuration['timelimit'] = self.TIMELIMIT
+    if not 'modifytsattr' in configuration:
+      configuration['modifytsattr'] = 'modifyTimestamp'
+    if not 'tsformat' in configuration:
+      configuration['tsformat'] = '%Y%m%d%H%M%SZ'
     # TODO(jaq): XXX EVIL.  ldap client libraries change behaviour if we use
     # polling, and it's nasty.  So don't let the user poll.
     if configuration['timelimit'] == 0:
@@ -126,6 +130,8 @@ class LdapSource(source.Source):
       configuration['tls_cacertfile'] = self.TLS_CACERTFILE
     if not 'tls_starttls' in configuration:
       configuration['tls_starttls'] = 0
+    if not 'referrals' in configuration:
+      configuration['referrals'] = 1
 
     # Translate tls_require into appropriate constant, if necessary.
     if configuration['tls_require_cert'] == 'never':
@@ -150,6 +156,7 @@ class LdapSource(source.Source):
       configuration['tls_starttls'] = 0
 
     # Setting global ldap defaults.
+    ldap.set_option(ldap.OPT_REFERRALS, configuration['referrals'])
     ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT,
                     configuration['tls_require_cert'])
     ldap.set_option(ldap.OPT_X_TLS_CACERTDIR, configuration['tls_cacertdir'])
@@ -245,7 +252,8 @@ class LdapSource(source.Source):
         return
 
       if result_type != ldap.RES_SEARCH_ENTRY:
-        self.log.info('Unknown result type %r, ignoring.', result_type)
+        self.log.info('Unknown result type %r, ignoring. -- %r', result_type, data)
+        return
 
       if not data:
         self.log.debug('Returning due to len(data) == 0')
@@ -435,7 +443,7 @@ class UpdateGetter(object):
     Returns:
       number of seconds since epoch.
     """
-    t = time.strptime(ldap_ts_string, '%Y%m%d%H%M%SZ')
+    t = time.strptime(ldap_ts_string, self.conf['tsformat'])
     return int(calendar.timegm(t))
 
   def FromTimestampToLdap(self, ts):
@@ -447,7 +455,7 @@ class UpdateGetter(object):
     Returns:
       LDAP format timestamp string.
     """
-    t = time.strftime('%Y%m%d%H%M%SZ', time.gmtime(ts))
+    t = time.strftime(self.conf['tsformat'], time.gmtime(ts))
     return t
 
   def GetUpdates(self, source, search_base, search_filter,
@@ -471,11 +479,9 @@ class UpdateGetter(object):
     self.attrs.append(self.conf['modifytsattr'])
 
     if since is not None:
-      ts = self.FromTimestampToLdap(since)
       # since openldap disallows modifyTimestamp "greater than" we have to
       # increment by one second.
-      ts = int(ts.rstrip('Z')) + 1
-      ts = '%sZ' % ts
+      ts = self.FromTimestampToLdap(since + 1/60)
       search_filter = ('(&%s(%s>=%s))' % (search_filter, self.conf['modifytsattr'], ts))
 
     if search_scope == 'base':
@@ -502,6 +508,8 @@ class UpdateGetter(object):
         if field not in obj:
           logging.warn('invalid object passed: %r not in %r', field, obj)
           raise ValueError('Invalid object passed: %r', obj)
+        else:
+          logging.debug('current object passed: %r in %r', field, obj)
 
       obj_ts = self.FromLdapToTimestamp(obj[self.conf['modifytsattr']][0])
 
