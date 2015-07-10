@@ -468,7 +468,7 @@ class UpdateGetter(object):
       error.ConfigurationError: scope is invalid
       ValueError: an object in the source map is malformed
     """
-    self.attrs.append('modifyTimestamp')
+    self.attrs.append(self.conf['modifytsattr'])
 
     if since is not None:
       ts = self.FromTimestampToLdap(since)
@@ -476,7 +476,7 @@ class UpdateGetter(object):
       # increment by one second.
       ts = int(ts.rstrip('Z')) + 1
       ts = '%sZ' % ts
-      search_filter = ('(&%s(modifyTimestamp>=%s))' % (search_filter, ts))
+      search_filter = ('(&%s(%s>=%s))' % (search_filter, self.conf['modifytsattr'], ts))
 
     if search_scope == 'base':
       search_scope = ldap.SCOPE_BASE
@@ -503,7 +503,7 @@ class UpdateGetter(object):
           logging.warn('invalid object passed: %r not in %r', field, obj)
           raise ValueError('Invalid object passed: %r', obj)
 
-      obj_ts = self.FromLdapToTimestamp(obj['modifyTimestamp'][0])
+      obj_ts = self.FromLdapToTimestamp(obj[self.conf['modifytsattr']][0])
 
       if max_ts is None or obj_ts > max_ts:
         max_ts = obj_ts
