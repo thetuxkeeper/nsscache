@@ -49,6 +49,8 @@ class TestLdapSource(mox.MoxTestBase):
                    'tls_require_cert': 0,
                    'tls_cacertdir': 'TEST_TLS_CACERTDIR',
                    'tls_cacertfile': 'TEST_TLS_CACERTFILE',
+                   'modifytsattr': 'modifyTimestamp',
+                   'homedirattr': 'homeDirectory',
                   }
 
   def testDefaultConfiguration(self):
@@ -79,6 +81,10 @@ class TestLdapSource(mox.MoxTestBase):
                       ldapsource.LdapSource.TLS_CACERTDIR)
     self.assertEquals(source.conf['tls_cacertfile'],
                       ldapsource.LdapSource.TLS_CACERTFILE)
+    self.assertEquals(source.conf['modifytsattr'],
+                      'modifyTimestamp')
+    self.assertEquals(source.conf['homedirattr'],
+                      'homeDirectory')
 
   def testOverrideDefaultConfiguration(self):
     config = dict(self.config)
@@ -661,17 +667,17 @@ class TestUpdateGetter(unittest.TestCase):
     ts = 1259641025
     expected_ldap_ts = '20091201041705Z'
     self.assertEquals(expected_ldap_ts,
-                      ldapsource.UpdateGetter({}).FromTimestampToLdap(ts))
+                      ldapsource.UpdateGetter({'tsformat': '%Y%m%d%H%M%SZ'}).FromTimestampToLdap(ts))
 
   def testFromLdapToTimestamp(self):
     expected_ts = 1259641025
     ldap_ts = '20091201041705Z'
     self.assertEquals(expected_ts,
-                      ldapsource.UpdateGetter({}).FromLdapToTimestamp(ldap_ts))
+                      ldapsource.UpdateGetter({'tsformat': '%Y%m%d%H%M%SZ'}).FromLdapToTimestamp(ldap_ts))
 
   def testPasswdEmptySourceGetUpdates(self):
     """Test that getUpdates on the PasswdUpdateGetter works."""
-    getter = ldapsource.PasswdUpdateGetter({})
+    getter = ldapsource.PasswdUpdateGetter({'modifytsattr': 'modifyTimestamp', 'homedirattr': 'homeDirectory'})
 
     data = getter.GetUpdates(self.source, 'TEST_BASE',
                              'TEST_FILTER', 'base', None)
@@ -680,7 +686,7 @@ class TestUpdateGetter(unittest.TestCase):
 
   def testGroupEmptySourceGetUpdates(self):
     """Test that getUpdates on the GroupUpdateGetter works."""
-    getter = ldapsource.GroupUpdateGetter({})
+    getter = ldapsource.GroupUpdateGetter({'modifytsattr': 'modifyTimestamp'})
 
     data = getter.GetUpdates(self.source, 'TEST_BASE',
                              'TEST_FILTER', 'base', None)
@@ -689,7 +695,7 @@ class TestUpdateGetter(unittest.TestCase):
 
   def testShadowEmptySourceGetUpdates(self):
     """Test that getUpdates on the ShadowUpdateGetter works."""
-    getter = ldapsource.ShadowUpdateGetter({})
+    getter = ldapsource.ShadowUpdateGetter({'modifytsattr': 'modifyTimestamp'})
 
     data = getter.GetUpdates(self.source, 'TEST_BASE',
                              'TEST_FILTER', 'base', None)
@@ -698,7 +704,7 @@ class TestUpdateGetter(unittest.TestCase):
 
   def testAutomountEmptySourceGetsUpdates(self):
     """Test that getUpdates on the AutomountUpdateGetter works."""
-    getter = ldapsource.AutomountUpdateGetter({})
+    getter = ldapsource.AutomountUpdateGetter({'modifytsattr': 'modifyTimestamp'})
 
     data = getter.GetUpdates(self.source, 'TEST_BASE',
                              'TEST_FILTER', 'base', None)
@@ -709,7 +715,7 @@ class TestUpdateGetter(unittest.TestCase):
     """Test that a bad scope raises a config.ConfigurationError."""
     # One of the getters is sufficient, they all inherit the
     # exception-raising code.
-    getter = ldapsource.PasswdUpdateGetter({})
+    getter = ldapsource.PasswdUpdateGetter({'modifytsattr': 'modifyTimestamp', 'homedirattr': 'homeDirectory'})
 
     self.assertRaises(error.ConfigurationError, getter.GetUpdates,
                       self.source, 'TEST_BASE', 'TEST_FILTER',
