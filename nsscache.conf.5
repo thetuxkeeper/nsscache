@@ -155,6 +155,22 @@ Filename containing trusted CA certificates.  Defaults to
 .I /usr/share/ssl/cert.pem
 
 .TP
+.B ldap_referrals
+Follow referrals. Defaults to On.
+
+.TP
+.B ldap_modifytsattr
+The modify timestamp attribute in your directory.  Defaults to modifyTimestamp.
+
+.TP
+.B ldap_homedirattr
+The home directory attribute in your directory.  Defaults to homeDirectory.
+
+.TP
+.B ldap_tsformat
+The strptime format of ldap_modifytsattr attribute in your directory.  Defaults to %Y%m%d%H%M%SZ.
+
+.TP
 .B ldap_uidattr
 The uid-like attribute in your directory.  Defaults to uid.
 
