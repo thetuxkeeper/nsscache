@@ -617,11 +617,21 @@ class GroupUpdateGetter(UpdateGetter):
         members.extend(obj['memberUid'])
     elif 'member' in obj:
       for member_dn in obj['member']:
-        member_uid = member_dn.split(',')[0].split('=')[1]
-        if hasattr(self, 'groupregex'):
-          members.append(''.join([x for x in self.groupregex.findall(member_uid)]))
+        if conf['memberuidattr'] is None || conf['memberuidattr'].upper() == 'CN':
+          member_uid = member_dn.split(',')[0].split('=')[1]
+          if hasattr(self, 'groupregex'):
+            members.append(''.join([x for x in self.groupregex.findall(member_uid)]))
+          else:
+            members.append(member_uid)
         else:
-          members.append(member_uid)
+          member_cn = member_dn.split(',')[0]
+          search_filter = ('(%s)' % (member_cn))
+          source.Search(search_base=self.conf['base'], search_filter=search_filter,
+                        search_scope=ldap.SCOPE_SUBTREE, attrs=conf['memberuidattr'])
+         for obj in source:
+           #
+           members.append(obj[conf['memberuidattr']])
+
     members.sort()
 
     gr.gid = int(obj['gidNumber'][0])
