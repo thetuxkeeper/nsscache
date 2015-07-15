@@ -505,7 +505,9 @@ class UpdateGetter(object):
 
     data_map = self.CreateMap()
 
-    for obj in source:
+    source_complete = list(source)
+    logging.debug("-- list of found objects: %r", source_complete)
+    for obj in source_complete:
       for field in self.essential_fields:
         if field not in obj:
           logging.warn('invalid object passed: %r not in %r', field, obj)
@@ -517,7 +519,8 @@ class UpdateGetter(object):
         max_ts = obj_ts
 
       try:
-        if not data_map.Add(self.Transform(obj)):
+        logging.warn('object passed:  %r', obj)
+        if not data_map.Add(self.Transform(obj, source)):
           logging.info('could not add obj: %r', obj)
       except AttributeError, e:
         logging.warning('error %r, discarding malformed obj: %r',
@@ -545,7 +548,7 @@ class PasswdUpdateGetter(UpdateGetter):
     """Returns a new PasswdMap instance to have PasswdMapEntries added to it."""
     return passwd.PasswdMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms a LDAP posixAccount data structure into a PasswdMapEntry."""
 
     pw = passwd.PasswdMapEntry()
@@ -601,7 +604,7 @@ class GroupUpdateGetter(UpdateGetter):
     """Return a GroupMap instance."""
     return group.GroupMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms a LDAP posixGroup object into a group(5) entry."""
 
     gr = group.GroupMapEntry()
@@ -617,7 +620,7 @@ class GroupUpdateGetter(UpdateGetter):
         members.extend(obj['memberUid'])
     elif 'member' in obj:
       for member_dn in obj['member']:
-        if conf['memberuidattr'] is None || conf['memberuidattr'].upper() == 'CN':
+        if self.conf['memberuidattr'] is None or self.conf['memberuidattr'].upper() == 'CN':
           member_uid = member_dn.split(',')[0].split('=')[1]
           if hasattr(self, 'groupregex'):
             members.append(''.join([x for x in self.groupregex.findall(member_uid)]))
@@ -625,12 +628,13 @@ class GroupUpdateGetter(UpdateGetter):
             members.append(member_uid)
         else:
           member_cn = member_dn.split(',')[0]
-          search_filter = ('(%s)' % (member_cn))
-          source.Search(search_base=self.conf['base'], search_filter=search_filter,
-                        search_scope=ldap.SCOPE_SUBTREE, attrs=conf['memberuidattr'])
-         for obj in source:
-           #
-           members.append(obj[conf['memberuidattr']])
+          search_filter = ('(&(%s)(%s=*))' % (member_cn, self.conf['memberuidattr']))
+          source.Search(search_base=self.conf['base'], search_filter=search_filter, search_scope=ldap.SCOPE_SUBTREE, attrs=[ self.conf['memberuidattr'] ])
+          logging.debug('object: %r', member_dn)
+          for member_obj in source:
+            logging.debug('found object: %r', member_obj)
+            logging.debug('found uid: %r', member_obj[self.conf['memberuidattr']][0])
+            members.append(member_obj[self.conf['memberuidattr']][0])
 
     members.sort()
 
@@ -658,7 +662,7 @@ class ShadowUpdateGetter(UpdateGetter):
     """Return a ShadowMap instance."""
     return shadow.ShadowMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms an LDAP shadowAccont object into a shadow(5) entry."""
     shadow_ent = shadow.ShadowMapEntry()
     if 'uidattr' in self.conf:
