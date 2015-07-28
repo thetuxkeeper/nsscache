@@ -519,7 +519,7 @@ class UpdateGetter(object):
         max_ts = obj_ts
 
       try:
-        logging.warn('object passed:  %r', obj)
+        logging.debug('object passed:  %r', obj)
         if not data_map.Add(self.Transform(obj, source)):
           logging.info('could not add obj: %r', obj)
       except AttributeError, e:
@@ -604,6 +604,25 @@ class GroupUpdateGetter(UpdateGetter):
     """Return a GroupMap instance."""
     return group.GroupMap()
 
+  def recurive_group_members(self, group_dn, source, context):
+    members = []
+    group_cn = group_dn.split(',')[0]
+    search_filter = ('(&(%s))' % (group_cn))
+    source.Search(search_base=self.conf['base'], search_filter=search_filter, search_scope=ldap.SCOPE_SUBTREE, attrs=[ self.conf['memberuidattr'], 'member', 'uidNumber' ])
+    logging.debug('object:%r: %r', context, group_dn)
+    for member_obj in list(source):
+      logging.debug('found object:%r: %r', context, member_obj)
+      if 'member'in member_obj:
+        logging.debug('group found:%r', context)
+        for member_dn in member_obj['member']:
+          members.extend(self.recurive_group_members(member_dn, source, member_dn.split(',')[0].split('=')[1]))
+      else:
+        if self.conf['memberuidattr'] in member_obj and 'uidNumber' in member_obj:
+          logging.debug('found uid:%r: %r', context, member_obj[self.conf['memberuidattr']][0])
+          members.append(member_obj[self.conf['memberuidattr']][0])
+    logging.debug('returning members:%r: %r', context, members)
+    return members
+
   def Transform(self, obj, source=None):
     """Transforms a LDAP posixGroup object into a group(5) entry."""
 
@@ -620,6 +639,7 @@ class GroupUpdateGetter(UpdateGetter):
         members.extend(obj['memberUid'])
     elif 'member' in obj:
       for member_dn in obj['member']:
+        logging.debug('current member: %r', member_dn)
         if self.conf['memberuidattr'] is None or self.conf['memberuidattr'].upper() == 'CN':
           member_uid = member_dn.split(',')[0].split('=')[1]
           if hasattr(self, 'groupregex'):
@@ -627,15 +647,9 @@ class GroupUpdateGetter(UpdateGetter):
           else:
             members.append(member_uid)
         else:
-          member_cn = member_dn.split(',')[0]
-          search_filter = ('(&(%s)(%s=*))' % (member_cn, self.conf['memberuidattr']))
-          source.Search(search_base=self.conf['base'], search_filter=search_filter, search_scope=ldap.SCOPE_SUBTREE, attrs=[ self.conf['memberuidattr'] ])
-          logging.debug('object: %r', member_dn)
-          for member_obj in source:
-            logging.debug('found object: %r', member_obj)
-            logging.debug('found uid: %r', member_obj[self.conf['memberuidattr']][0])
-            members.append(member_obj[self.conf['memberuidattr']][0])
+          members.extend(self.recurive_group_members(member_dn, source, member_dn.split(',')[0].split('=')[1]))
 
+    members = list(set(members))
     members.sort()
 
     gr.gid = int(obj['gidNumber'][0])
