@@ -598,29 +598,41 @@ class GroupUpdateGetter(UpdateGetter):
       self.attrs = ['cn', 'gidNumber', 'memberUid']
     if 'groupregex' in conf:
       self.groupregex = re.compile(self.conf['groupregex'])
+    if 'uidregex' in conf:
+      self.uidregex = re.compile(self.conf['uidregex'])
     self.essential_fields = ['cn']
 
   def CreateMap(self):
     """Return a GroupMap instance."""
     return group.GroupMap()
 
-  def recurive_group_members(self, group_dn, source, context):
+  def recurive_group_members(self, input_dn, source):
     members = []
-    group_cn = group_dn.split(',')[0]
-    search_filter = ('(&(%s))' % (group_cn))
-    source.Search(search_base=self.conf['base'], search_filter=search_filter, search_scope=ldap.SCOPE_SUBTREE, attrs=[ self.conf['memberuidattr'], 'member', 'uidNumber' ])
-    logging.debug('object:%r: %r', context, group_dn)
+    input_cn = input_dn.split(',')[0]
+    search_filter = ('(&(%s))' % (input_cn))
+    search_attrs = [ 'uid', 'member', 'uidNumber' ]
+    if 'uidattr' in self.conf:
+      uidattr = self.conf['uidattr']
+      search_attrs.append(uidattr)
+    else:
+      uidattr = 'uid'
+    
+    source.Search(search_base=self.conf['base'], search_filter=search_filter, search_scope=ldap.SCOPE_SUBTREE, attrs=search_attrs)
+    logging.debug('object: %r', input_dn)
     for member_obj in list(source):
-      logging.debug('found object:%r: %r', context, member_obj)
+      logging.debug('found object: %r', member_obj)
       if 'member'in member_obj:
-        logging.debug('group found:%r', context)
+        logging.debug('group found')
         for member_dn in member_obj['member']:
-          members.extend(self.recurive_group_members(member_dn, source, member_dn.split(',')[0].split('=')[1]))
+          members.extend(self.recurive_group_members(member_dn, source))
       else:
-        if self.conf['memberuidattr'] in member_obj and 'uidNumber' in member_obj:
-          logging.debug('found uid:%r: %r', context, member_obj[self.conf['memberuidattr']][0])
-          members.append(member_obj[self.conf['memberuidattr']][0])
-    logging.debug('returning members:%r: %r', context, members)
+        if uidattr in member_obj and 'uidNumber' in member_obj:
+          logging.debug('found uid: %r', member_obj[uidattr][0])
+          if hasattr(self, 'uidregex'):
+            members.append(''.join([x for x in self.uidregex.findall(member_obj[uidattr][0])]))
+          else:
+            members.append(member_obj[uidattr][0])
+    logging.debug('returning members: %r', members)
     return members
 
   def Transform(self, obj, source=None):
@@ -640,14 +652,11 @@ class GroupUpdateGetter(UpdateGetter):
     elif 'member' in obj:
       for member_dn in obj['member']:
         logging.debug('current member: %r', member_dn)
-        if self.conf['memberuidattr'] is None or self.conf['memberuidattr'].upper() == 'CN':
-          member_uid = member_dn.split(',')[0].split('=')[1]
-          if hasattr(self, 'groupregex'):
-            members.append(''.join([x for x in self.groupregex.findall(member_uid)]))
-          else:
-            members.append(member_uid)
+        member_cn = member_dn.split(',')[0].split('=')[1]
+        if hasattr(self, 'groupregex'):
+          members.append(''.join([x for x in self.groupregex.findall(member_cn)]))
         else:
-          members.extend(self.recurive_group_members(member_dn, source, member_dn.split(',')[0].split('=')[1]))
+          members.extend(self.recurive_group_members(member_dn, source))
 
     members = list(set(members))
     members.sort()
@@ -680,7 +689,7 @@ class ShadowUpdateGetter(UpdateGetter):
     """Transforms an LDAP shadowAccont object into a shadow(5) entry."""
     shadow_ent = shadow.ShadowMapEntry()
     if 'uidattr' in self.conf:
-      shadow_ent.name = obj[uidattr][0]
+      shadow_ent.name = obj[self.conf['uidattr']][0]
     else:
       shadow_ent.name = obj['uid'][0]
 
