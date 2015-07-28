@@ -727,7 +727,7 @@ class NetgroupUpdateGetter(UpdateGetter):
     """Return a NetgroupMap instance."""
     return netgroup.NetgroupMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms an LDAP nisNetgroup object into a netgroup(5) entry."""
     netgroup_ent = netgroup.NetgroupMapEntry()
     netgroup_ent.name = obj['cn'][0]
@@ -756,7 +756,7 @@ class AutomountUpdateGetter(UpdateGetter):
     """Return a AutomountMap instance."""
     return automount.AutomountMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms an LDAP automount object into an autofs(5) entry."""
     automount_ent = automount.AutomountMapEntry()
     automount_ent.key = obj['cn'][0]
@@ -790,7 +790,7 @@ class SshkeyUpdateGetter(UpdateGetter):
     """Returns a new SshkeyMap instance to have SshkeyMapEntries added to it."""
     return sshkey.SshkeyMap()
 
-  def Transform(self, obj):
+  def Transform(self, obj, source=None):
     """Transforms a LDAP posixAccount data structure into a SshkeyMapEntry."""
 
     skey = sshkey.SshkeyMapEntry()
